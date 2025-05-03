@@ -104,7 +104,7 @@ if __name__ == "__main__":
         "--env",
         type=str,
         default="PongNoFrameskip-v4",
-        help="Name of the environment to visualize on"
+        help="Name of the environment to visualize on like (PongNoFrameskip-v4)",
     )
     args = parser.parse_args()
 
