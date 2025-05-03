@@ -1,0 +1,38 @@
+# --- General Configuration ---
+env_id: "PongNoFrameskip-v4"
+seed: 42
+total_timesteps: 5000000
+train: True
+
+# --- Environment Configuration ---
+environment:
+  n_envs_train: 4
+  n_envs_eval: 4
+  n_stack: 4 # Frame stack handled by make_atari_env default
+
+# --- Paths ---
+paths:
+  log_dir: "./logs/dqn_full_vision_pong_yml/"
+  model_save_path: "./models/dqn_pong_yml/dqn_full_vision_pong_best" 
+
+# --- Algorithm (DQN) Hyperparameters ---
+algorithm:
+  name: "DQN"
+  policy: "CnnPolicy"
+  buffer_size: 100000
+  learning_starts: 10000
+  batch_size: 32
+  gamma: 0.99
+  train_freq: 4 # Train every N steps
+  gradient_steps: 1 # How many gradient updates per training step
+  target_update_interval: 1000 # Update target network every N training steps
+  exploration_fraction: 0.1
+  exploration_final_eps: 0.01
+  learning_rate: 0.0001
+
+# --- Evaluation Configuration ---
+evaluation:
+  eval_freq: 10000 # Evaluate every N environment steps
+  reward_threshold: 18 # For StopTrainingOnRewardThreshold
+  n_eval_episodes: 5 # Episodes for EvalCallback and final evaluation
+  deterministic: True # Use deterministic actions during evaluation
