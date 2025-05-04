@@ -35,6 +35,16 @@ def main(config):
     config["paths"]["model_save_path"] = str(run_path)
     config["paths"]["log_dir"] = str(run_path / "logs")
 
+    config_save_path = str(run_path / "config.yml")
+    print(f"Saving configuration used to: {config_save_path}")
+    try:
+        with open(config_save_path, "w") as f:
+            # Use yaml.dump to write the dictionary to the file
+            # default_flow_style=False makes it more readable (block style)
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+    except Exception as e:
+        print(f"Error saving config file: {e}")
+
     """Main training and evaluation function."""
 
     # --- Environment Setup ---
