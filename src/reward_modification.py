@@ -3,24 +3,50 @@ import numpy as np
 
 
 # Specific reward for ram environment
-class PongHitRewardWrapper(gym.Wrapper):
+class PongRamHitRewardWrapper(gym.Wrapper):
     def __init__(self, env: gym.Env):
         super().__init__(env)
         self.ale = self.unwrapped.ale
         self.last_ball_x = None
         self.old_ram = None
+    
+        low = np.array([0, 0, 0, 0, 0, 0], dtype=np.float32)
+        high = np.array(
+            [21, 21, 255, 255, 255, 255], dtype=np.float32
+        )  # Use reasonable upper bounds
+        self.observation_space = gym.spaces.Box(low, high, dtype=np.float32)
 
     def reset(self, **kwargs):
+        seed = kwargs.get("seed")
+        if seed is not None:
+            # The base gymnasium env handles seeding on reset
+            pass  # Let the base env handle it
+
         obs, info = self.env.reset(**kwargs)
         self.last_ball_x = None
-        return obs, info
+        # Convert initial RAM observation to our custom state
+        state = self.decode_ram()
+        obs_custom = np.array(
+            [
+                state["cpu_score"],
+                state["player_score"],
+                state["opponent_y"],
+                state["player_y"],
+                state["ball_x"],
+                state["ball_y"],
+            ],
+            dtype=np.float32,
+        )
+        return obs_custom, info
 
     def step(self, action):
         obs, reward, terminated, truncated, info = self.env.step(action)
         state = self.decode_ram()
 
+        obs = np.array([state["cpu_score"], state["player_score"], state["opponent_y"], state["player_y"], state["ball_x"], state["ball_y"]], dtype=np.float32)
+
         hit_reward = self.detect_hit(state)
-        reward += hit_reward
+        # reward += hit_reward
         return obs, reward, terminated, truncated, info
 
     # For determinstic V4 env
@@ -30,13 +56,23 @@ class PongHitRewardWrapper(gym.Wrapper):
         #     print("Ram:", np.where(ram == self.old_ram)[0])
         #     print(ram)
         self.old_ram = ram.copy()
-        return {
-            "ball_x": ram[49],
-            "ball_y": ram[50],
+        # return {
+        #     "ball_x": ram[49],
+        #     "ball_y": ram[50],
+        #     "player_y": ram[51],
+        #     "player_x": ram[52],
+        #     "opponent_x": ram[53],
+        #     "opponent_y": ram[54],
+        # }
+
+        # is this the real correct information
+        return  {
+            "cpu_score": ram[13],
+            "player_score": ram[14],
+            "opponent_y": ram[50],
             "player_y": ram[51],
-            "player_x": ram[52],
-            "opponent_x": ram[53],
-            "opponent_y": ram[54],
+            "ball_x": ram[49],
+            "ball_y": ram[54]
         }
 
     def detect_hit(self, state):
@@ -69,23 +105,14 @@ class PongHitRewardWrapper(gym.Wrapper):
                 # and current_ball_x > PLAYER_PADDLE_RIGHT_X + HIT_MARGIN_PLAYER
             ):
                 # Ensure the player paddle is actually near the ball's y coordinate for a more robust check (optional)
-                # ball_y = state["ball_y"]
-                # player_y = state["player_y"] # Center of paddle
-                # PADDLE_HEIGHT = 16 # Or get from RAM if available/needed
-                # if abs(ball_y - player_y) <= PADDLE_HEIGHT / 2 + some_margin:
                 hit_reward = -0.1
-                # print("yeah")
 
             # Opponent Hit: Ball was near/at opponent paddle, now moving left
             elif (
                 self.last_ball_x >= PLAYER_PADDLE_RIGHT_X - HIT_MARGIN_PLAYER
                 and current_ball_x < self.last_ball_x  # Check ball is moving left
-                # Optional stricter check: ensure it cleared the paddle
-                # and current_ball_x < OPPONENT_PADDLE_LEFT_X - HIT_MARGIN_OPPONENT
             ):
-                # Optional Y-coordinate check similar to player
-                hit_reward = 0.25  # Penalize opponent hits if desired
-                # print("No")
+                hit_reward = 0.25  # Give reward to player for hitting the ball
 
         self.last_ball_x = current_ball_x
         return hit_reward
