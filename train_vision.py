@@ -3,7 +3,6 @@ import gymnasium as gym
 import torch
 import numpy as np
 import os
-import yaml
 import argparse
 
 from stable_baselines3 import DQN
@@ -16,6 +15,7 @@ import ale_py
 from src.config_loader import load_config
 from src.create_env import make_full_vision_env
 from src.save_model_helpers import create_run_directory
+from src.custom_cnn_policy import create_custom_policy
 
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 print(f"Using device: {device}")
@@ -69,6 +69,8 @@ def main(config):
         verbose=1,
     )
 
+    policy_kwargs = create_custom_policy(config)
+
     # --- Training ---
     print("Starting training...")
     algo_config = config['algorithm']
@@ -88,6 +90,7 @@ def main(config):
         learning_rate=algo_config['learning_rate'],
         seed=config['seed'],
         tensorboard_log=config['paths']['log_dir'],
+        policy_kwargs=policy_kwargs,
         device=device,
     )
 

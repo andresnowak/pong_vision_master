@@ -20,6 +20,12 @@ In Ram:
             "opponent_y": ram[54],
         }
 - But x position is not available, but it seems the positions are x=74 for opponent and x=187 for the player
+- It seems this is maybe the correct information in PongNoFrameSkip-v4 (https://colab.research.google.com/drive/1Szy7ySmKxdEVMthZXIHjKdjDAaQGDPIP?usp=sharing#scrollTo=tRBgYbDiwuTd) {cpu_score = ram[13]      # computer/ai opponent score 
+            player_score = ram[14]   # your score            
+            cpu_paddle_y = ram[50]     # Y coordinate of computer paddle
+            player_paddle_y = ram[51]  # Y coordinate of your paddle
+            ball_x = ram[49]           # X coordinate of ball
+            ball_y = ram[54]           # Y coordinate of ball
 
 
 Size of pong environment:

@@ -30,6 +30,13 @@ algorithm:
   exploration_final_eps: 0.01
   learning_rate: 0.0001
 
+  policy_kwargs:
+      # Name matching a key in AVAILABLE_EXTRACTORS
+      features_extractor_class_name: "DQNCnn"
+      # Arguments to pass to the extractor's __init__
+      features_extractor_kwargs:
+        features_dim: 128
+
 # --- Evaluation Configuration ---
 evaluation:
   eval_freq: 10000 # Evaluate every N environment steps
