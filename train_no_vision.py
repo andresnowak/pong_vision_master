@@ -91,7 +91,7 @@ def main(config):
         seed=config["seed"],
         tensorboard_log=config["paths"]["log_dir"],
         device=device,
-        policy_kwargs=dict(net_arch=[512, 256, 128, 128]),
+        policy_kwargs=dict(net_arch=[128, 256, 128, 128]),
     )
 
     # Train the model
