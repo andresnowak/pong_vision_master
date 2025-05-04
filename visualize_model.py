@@ -46,7 +46,8 @@ def load_model(model_path: str, env):
 def watch_agent_play(env_id: str, model_path: str):
     # Create environment
 
-    if "ram" in env_id:
+    if "-ram" in env_id:
+        print("osidjfosidf")
         env = gym.make(env_id, render_mode="human")
         env = DummyVecEnv([lambda: env])  # Wrap in vectorized environment
         env = VecFrameStack(env, n_stack=N_STACK)
@@ -103,7 +104,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--env",
         type=str,
-        default="PongNoFrameskip-v4",
         help="Name of the environment to visualize on like (PongNoFrameskip-v4)",
     )
     args = parser.parse_args()
