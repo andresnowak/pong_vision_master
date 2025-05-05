@@ -2,3 +2,4 @@
 *logs
 *models
 .DS_Store
+!/best_models
