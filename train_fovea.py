@@ -120,12 +120,16 @@ def train(config):
     ]
 
     q_network = QNetwork(envs, sensory_action_set=sensory_action_set).to(device)
-    optimizer = optim.Adam(q_network.parameters(), lr=config["algorithm"]["learning_rate"])
+    optimizer = optim.Adam(
+        q_network.parameters(), lr=config["algorithm"]["learning_rate"]
+    )
     target_network = QNetwork(envs, sensory_action_set=sensory_action_set).to(device)
     target_network.load_state_dict(q_network.state_dict())
 
     sfn = SelfPredictionNetwork(envs, sensory_action_set=sensory_action_set).to(device)
-    sfn_optimizer = optim.Adam(sfn.parameters(), lr=config["algorithm"]["learning_rate"])
+    sfn_optimizer = optim.Adam(
+        sfn.parameters(), lr=config["algorithm"]["learning_rate"]
+    )
 
     # print(envs.single_observation_space, envs.num_envs)
     # obs, _ = envs.reset()
@@ -296,10 +300,12 @@ def train(config):
                         * (motor_target_max + sensory_target_max)
                         * (1 - data.dones.flatten())
                     )
-                    # DQN loss formula 
-                    original_td_target = data.rewards.flatten() + config["algorithm"]["gamma"] * (
-                        motor_target_max + sensory_target_max
-                    ) * (1 - data.dones.flatten())
+                    # DQN loss formula
+                    original_td_target = data.rewards.flatten() + config["algorithm"][
+                        "gamma"
+                    ] * (motor_target_max + sensory_target_max) * (
+                        1 - data.dones.flatten()
+                    )
 
                 old_motor_q_val, old_sensory_q_val = q_network(
                     resize(data.observations)
@@ -357,9 +363,9 @@ def train(config):
                 optimizer.step()
 
             # update the target network
-            if (
-                global_transitions // config["environment"]["env_num"]
-            ) % config["algorithm"]["target_network_frequency"] == 0:
+            if (global_transitions // config["environment"]["env_num"]) % config[
+                "algorithm"
+            ]["target_network_frequency"] == 0:
                 target_network.load_state_dict(q_network.state_dict())
 
             # evaluation
@@ -379,9 +385,17 @@ def train(config):
                             config["seed"] + eval_ep,
                             frame_stack=config["environment"]["frame_stack"],
                             action_repeat=config["environment"]["action_repeat"],
-                            fov_size=(config["environment"]["fov_size"], config["environment"]["fov_size"]),
-                            fov_init_loc=(config["environment"]["fov_init_loc"], config["environment"]["fov_init_loc"]),
-                            sensory_action_mode=config["environment"]["sensory_action_mode"],
+                            fov_size=(
+                                config["environment"]["fov_size"],
+                                config["environment"]["fov_size"],
+                            ),
+                            fov_init_loc=(
+                                config["environment"]["fov_init_loc"],
+                                config["environment"]["fov_init_loc"],
+                            ),
+                            sensory_action_mode=config["environment"][
+                                "sensory_action_mode"
+                            ],
                             sensory_action_space=(
                                 -config["environment"]["sensory_action_space"],
                                 config["environment"]["sensory_action_space"],
@@ -390,7 +404,7 @@ def train(config):
                             clip_reward=config["environment"]["clip_reward"],
                             mask_out=True,
                             training=False,
-                            record=config["environment"]["capture_video"],
+                            record=config["capture_video"],
                         )
                     ]
                     eval_env = gym.vector.SyncVectorEnv(eval_env)
@@ -434,33 +448,40 @@ def train(config):
                                 infos["final_info"][0]["ep_len"]
                             )
                             if config["capture_video"]:
+                                # record_file_dir = os.path.join(
+                                #     "recordings",
+                                #     config["exp_name"],
+                                #     os.path.basename(__file__).rstrip(".py"),
+                                #     config["environment"]["env_id"],
+                                # )
                                 record_file_dir = os.path.join(
-                                    "recordings",
-                                    config["exp_name"],
-                                    os.path.basename(__file__).rstrip(".py"),
-                                    config["environment"]["env_id"],
+                                    config["paths"]["model_save_path"], "recordings"
                                 )
                                 os.makedirs(record_file_dir, exist_ok=True)
                                 record_file_fn = f"{config['environment']['env_id']}_seed{config['seed']}_step{global_transitions:07d}_eval{eval_ep:02d}_record.pt"
                                 eval_env.envs[0].save_record_to_file(
                                     os.path.join(record_file_dir, record_file_fn)
                                 )
-                                if eval_ep == 0:
-                                    model_file_dir = os.path.join(
-                                        "trained_models",
-                                        config['exp_name'],
-                                        os.path.basename(__file__).rstrip(".py"),
-                                        config["environment"]["env_id"],
-                                    )
-                                    os.makedirs(model_file_dir, exist_ok=True)
-                                    model_fn = f"{config['environment']['seed']}_seed{config['seed']}_step{global_transitions:07d}_model.pt"
-                                    torch.save(
-                                        {
-                                            "sfn": sfn.state_dict(),
-                                            "q": q_network.state_dict(),
-                                        },
-                                        os.path.join(model_file_dir, model_fn),
-                                    )
+
+                            if eval_ep == 0:
+                                # model_file_dir = os.path.join(
+                                #     "trained_models",
+                                #     config['exp_name'],
+                                #     os.path.basename(__file__).rstrip(".py"),
+                                #     config["environment"]["env_id"],
+                                # )
+                                model_file_dir = os.path.join(
+                                    config["paths"]["model_save_path"], "trained_models"
+                                )
+                                os.makedirs(model_file_dir, exist_ok=True)
+                                model_fn = f"{config['environment']['env_id']}_seed{config['seed']}_step{global_transitions:07d}_model.pt"
+                                torch.save(
+                                    {
+                                        "sfn": sfn.state_dict(),
+                                        "q": q_network.state_dict(),
+                                    },
+                                    os.path.join(model_file_dir, model_fn),
+                                )
 
                 writer.add_scalar(
                     "charts/eval_episodic_return",
@@ -481,7 +502,6 @@ def train(config):
                         "eval_episodic_reward": eval_episodic_returns,
                     }
                 )
-
 
                 q_network.train()
                 sfn.train()
@@ -508,10 +528,9 @@ if __name__ == "__main__":
     config = load_config(args.config)
 
     run_name = f"{config['environment']['env_id']}__{os.path.basename(__file__)}__{config['seed']}__{get_timestr()}"
-    run_dir = os.path.join("runs", config['exp_name'])
+    run_dir = os.path.join("runs", config["exp_name"])
     if not os.path.exists(run_dir):
         os.makedirs(run_dir, exist_ok=True)
-
 
     run_path = create_run_directory(config["paths"]["model_save_path"])
     print(f"Run directory created at: {run_path}")
@@ -520,7 +539,7 @@ if __name__ == "__main__":
     config["paths"]["model_save_path"] = str(run_path)
     config["paths"]["log_dir"] = str(run_path / "logs")
 
-    os.makedirs(os.path.dirname(config['paths']['model_save_path']), exist_ok=True)
+    os.makedirs(os.path.dirname(config["paths"]["model_save_path"]), exist_ok=True)
 
     config_save_path = str(run_path / "config.yml")
     print(f"Saving configuration used to: {config_save_path}")
@@ -533,4 +552,3 @@ if __name__ == "__main__":
         print(f"Error saving config file: {e}")
 
     train(config)
-    
