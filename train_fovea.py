@@ -288,6 +288,7 @@ def train(config):
                     observ_r_adjusted[data.rewards.flatten() > 0] = (
                         1 - observ_r_adjusted[data.rewards.flatten() > 0]
                     )
+                    # DQN loss formula (but they have the differnce of rewards - everything else instead of +)
                     td_target = (
                         data.rewards.flatten()
                         - (1 - observ_r) * sugarl_r_scale
@@ -295,6 +296,7 @@ def train(config):
                         * (motor_target_max + sensory_target_max)
                         * (1 - data.dones.flatten())
                     )
+                    # DQN loss formula 
                     original_td_target = data.rewards.flatten() + config["algorithm"]["gamma"] * (
                         motor_target_max + sensory_target_max
                     ) * (1 - data.dones.flatten())
@@ -376,7 +378,7 @@ def train(config):
                             config["environment"]["env_id"],
                             config["seed"] + eval_ep,
                             frame_stack=config["environment"]["frame_stack"],
-                            action_repeat=aconfig["environment"]["action_repeat"],
+                            action_repeat=config["environment"]["action_repeat"],
                             fov_size=(config["environment"]["fov_size"], config["environment"]["fov_size"]),
                             fov_init_loc=(config["environment"]["fov_init_loc"], config["environment"]["fov_init_loc"]),
                             sensory_action_mode=config["environment"]["sensory_action_mode"],
