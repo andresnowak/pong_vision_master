@@ -1,0 +1,39 @@
+exp_name: dqn_fovea_pong.py
+seed: 1
+capture_video: false
+
+paths:
+  log_dir: "./logs/dqn_fovea_pong_yml/"
+  model_save_path: "./models/dqn_pong_yml/dqn_fovea_pong_best" 
+
+environment:
+  env_id: "pong"
+  env_num: 1
+  frame_stack: 4
+  pvm_stack: 4
+  action_repeat: 4
+  clip_reward: false
+  fov_size: 30
+  fov_init_loc: 30
+  sensory_action_mode: "relative"
+  sensory_action_space: 10
+  resize_to_full: false
+  sensory_action_x_size: 30
+  sensory_action_y_size: 30
+
+algorithm:
+  total_timesteps: 3000000
+  learning_rate: 0.0001
+  buffer_size: 100000
+  gamma: 0.99
+  target_network_frequency: 1000
+  batch_size: 32
+  start_e: 1.0
+  end_e: 0.01
+  exploration_fraction: 0.1
+  learning_starts: 80000
+  train_frequency: 4
+
+evaluation:
+  eval_frequency: 500000
+  eval_num: 10

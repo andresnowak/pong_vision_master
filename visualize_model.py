@@ -47,7 +47,6 @@ def watch_agent_play(env_id: str, model_path: str):
     # Create environment
 
     if "-ram" in env_id:
-        print("osidjfosidf")
         env = gym.make(env_id, render_mode="human")
         env = DummyVecEnv([lambda: env])  # Wrap in vectorized environment
         env = VecFrameStack(env, n_stack=N_STACK)
