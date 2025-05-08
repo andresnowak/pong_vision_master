@@ -474,6 +474,11 @@ def train(config):
                 print(
                     f"[T: {time.time() - start_time:.2f}]  [N: {global_transitions:07,d}]  [Eval R: {np.mean(eval_episodic_returns):.2f}+/-{np.std(eval_episodic_returns):.2f}] [R list: {','.join([str(r) for r in eval_episodic_returns])}]"
                 )
+                progress_bar.set_postfix(
+                    {
+                        "eval_episodic_reward": eval_episodic_returns,
+                    }
+                )
 
 
                 q_network.train()
