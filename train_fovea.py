@@ -33,6 +33,7 @@ import time
 import os
 import yaml
 from tqdm import tqdm
+import wandb
 
 
 from active_gym.atari_env import AtariFixedFovealEnv, AtariEnvArgs
@@ -47,6 +48,11 @@ from src.save_model_helpers import create_run_directory
 
 
 def train(config):
+    wandb.init(
+        project=config["project"],
+        name=config["exp_name"],
+        config=config,  # Pass the entire config dictionary
+    )
     writer = SummaryWriter(config["paths"]["log_dir"])
     # writer.add_text(
     #     "hyperparameters",
@@ -66,34 +72,56 @@ def train(config):
     )
 
     # NOTE: env setup (How many environments we will use but here we will always use one really, so this isn't necessary)
-    envs = []
-    for i in range(config["environment"]["env_num"]):
-        envs.append(
-            make_fovea_env(
-                config["environment"]["env_id"],
-                config["seed"] + i,
-                frame_stack=config["environment"]["frame_stack"],
-                action_repeat=config["environment"]["action_repeat"],
-                fov_size=(
-                    config["environment"]["fov_size"],
-                    config["environment"]["fov_size"],
-                ),
-                fov_init_loc=(
-                    config["environment"]["fov_init_loc"],
-                    config["environment"]["fov_init_loc"],
-                ),
-                sensory_action_mode=config["environment"]["sensory_action_mode"],
-                sensory_action_space=(
-                    -config["environment"]["sensory_action_space"],
-                    config["environment"]["sensory_action_space"],
-                ),
-                resize_to_full=config["environment"]["resize_to_full"],
-                clip_reward=config["environment"]["clip_reward"],
-                mask_out=True,
-            )
-        )
-    # envs = gym.vector.AsyncVectorEnv(envs)
-    envs = gym.vector.SyncVectorEnv(envs)
+    # envs = []
+    # for i in range(config["environment"]["env_num"]):
+    #     envs.append(
+    #         make_fovea_env(
+    #             config["environment"]["env_id"],
+    #             config["seed"] + i,
+    #             frame_stack=config["environment"]["frame_stack"],
+    #             action_repeat=config["environment"]["action_repeat"],
+    #             fov_size=(
+    #                 config["environment"]["fov_size"],
+    #                 config["environment"]["fov_size"],
+    #             ),
+    #             fov_init_loc=(
+    #                 config["environment"]["fov_init_loc_x"],
+    #                 config["environment"]["fov_init_loc_y"],
+    #             ),
+    #             sensory_action_mode=config["environment"]["sensory_action_mode"],
+    #             sensory_action_space=(
+    #                 -config["environment"]["sensory_action_space"],
+    #                 config["environment"]["sensory_action_space"],
+    #             ),
+    #             resize_to_full=config["environment"]["resize_to_full"],
+    #             clip_reward=config["environment"]["clip_reward"],
+    #             mask_out=True,
+    #         )
+    #     )
+    # # envs = gym.vector.AsyncVectorEnv(envs)
+    envs = make_fovea_env(
+        config["environment"]["env_id"],
+        config["seed"],
+        frame_stack=config["environment"]["frame_stack"],
+        action_repeat=config["environment"]["action_repeat"],
+        fov_size=(
+            config["environment"]["fov_size"],
+            config["environment"]["fov_size"],
+        ),
+        fov_init_loc=(
+            config["environment"]["fov_init_loc_x"],
+            config["environment"]["fov_init_loc_y"],
+        ),
+        sensory_action_mode=config["environment"]["sensory_action_mode"],
+        sensory_action_space=(
+            -config["environment"]["sensory_action_space"],
+            config["environment"]["sensory_action_space"],
+        ),
+        resize_to_full=config["environment"]["resize_to_full"],
+        clip_reward=config["environment"]["clip_reward"],
+        mask_out=True,
+    )
+    envs = gym.vector.SyncVectorEnv([envs])
 
     sugarl_r_scale = get_sugarl_reward_scale_atari(config["environment"]["env_id"])
 
@@ -155,7 +183,7 @@ def train(config):
         config["environment"]["pvm_stack"],
         (
             envs.num_envs,
-            config["environment"]["pvm_stack"],
+            config["environment"]["frame_stack"],
         )
         + OBSERVATION_SIZE,
     )
@@ -179,10 +207,11 @@ def train(config):
             global_transitions,
         )
         if random.random() < epsilon:
-            actions = np.array(
-                [envs.single_action_space.sample() for _ in range(envs.num_envs)]
-            )
-            motor_actions = np.array([actions[0]["motor_action"]])
+            # actions = np.array(
+            #     [envs.single_action_space.sample() for _ in range(envs.num_envs)]
+            # )
+            actions = envs.single_action_space.sample()
+            motor_actions = np.array([actions["motor_action"]])
             sensory_actions = np.array([random.randint(0, len(sensory_action_set) - 1)])
         else:
             motor_q_values, sensory_q_values = q_network(
@@ -224,6 +253,17 @@ def train(config):
                         global_transitions,
                     )
                     writer.add_scalar("charts/epsilon", epsilon, global_transitions)
+
+                    # wandb
+                    wandb.log(
+                        {
+                            "episodic_return": infos["final_info"][idx]["reward"],
+                            "episodic_length": infos["final_info"][idx]["ep_len"],
+                            "epsilon": epsilon,
+                            "global_transitions": global_transitions,
+                        }
+                    )
+
                     break
 
         # TRY NOT TO MODIFY: save data to reply buffer; handle `terminal_observation`
@@ -357,6 +397,19 @@ def train(config):
                         global_transitions,
                     )
 
+                    wandb.log(
+                        {
+                            "td_loss": loss,
+                            "q_values": old_motor_val.mean().item(),
+                            "sensor_q_values": old_sensory_val.mean().item(),
+                            "SPS": int(global_transitions / (time.time() - start_time)),
+                            "sfn_loss": sfn_loss.item(),
+                            "observ_r": observ_r.mean(),
+                            "original_td_target": original_td_target.mean().item(),
+                            "sugarl_r_scaled_td_target": td_target.mean().item(),
+                        }
+                    )
+
                 # optimize the model
                 optimizer.zero_grad()
                 loss.backward()
@@ -379,35 +432,34 @@ def train(config):
                 eval_episodic_returns, eval_episodic_lengths = [], []
 
                 for eval_ep in range(config["evaluation"]["eval_num"]):
-                    eval_env = [
-                        make_fovea_env(
-                            config["environment"]["env_id"],
-                            config["seed"] + eval_ep,
-                            frame_stack=config["environment"]["frame_stack"],
-                            action_repeat=config["environment"]["action_repeat"],
-                            fov_size=(
-                                config["environment"]["fov_size"],
-                                config["environment"]["fov_size"],
-                            ),
-                            fov_init_loc=(
-                                config["environment"]["fov_init_loc"],
-                                config["environment"]["fov_init_loc"],
-                            ),
-                            sensory_action_mode=config["environment"][
-                                "sensory_action_mode"
-                            ],
-                            sensory_action_space=(
-                                -config["environment"]["sensory_action_space"],
-                                config["environment"]["sensory_action_space"],
-                            ),
-                            resize_to_full=config["environment"]["resize_to_full"],
-                            clip_reward=config["environment"]["clip_reward"],
-                            mask_out=True,
-                            training=False,
-                            record=config["capture_video"],
-                        )
-                    ]
-                    eval_env = gym.vector.SyncVectorEnv(eval_env)
+                    eval_env = make_fovea_env(
+                        config["environment"]["env_id"],
+                        config["seed"] + eval_ep,
+                        frame_stack=config["environment"]["frame_stack"],
+                        action_repeat=config["environment"]["action_repeat"],
+                        fov_size=(
+                            config["environment"]["fov_size"],
+                            config["environment"]["fov_size"],
+                        ),
+                        fov_init_loc=(
+                            config["environment"]["fov_init_loc_x"],
+                            config["environment"]["fov_init_loc_y"],
+                        ),
+                        sensory_action_mode=config["environment"][
+                            "sensory_action_mode"
+                        ],
+                        sensory_action_space=(
+                            -config["environment"]["sensory_action_space"],
+                            config["environment"]["sensory_action_space"],
+                        ),
+                        resize_to_full=config["environment"]["resize_to_full"],
+                        clip_reward=config["environment"]["clip_reward"],
+                        mask_out=True,
+                        training=False,
+                        record=config["capture_video"],
+                    )
+                    eval_env = gym.vector.SyncVectorEnv([eval_env])
+
                     obs_eval, _ = eval_env.reset()
                     done = False
                     pvm_buffer_eval = PVMBuffer(
@@ -500,6 +552,13 @@ def train(config):
                 progress_bar.set_postfix(
                     {
                         "eval_episodic_reward": eval_episodic_returns,
+                    }
+                )
+
+                wandb.log(
+                    {
+                        "eval_episodic_return": np.mean(eval_episodic_returns),
+                        "eval_episodic_return_std": np.std(eval_episodic_returns),
                     }
                 )
 
