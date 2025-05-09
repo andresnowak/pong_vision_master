@@ -141,7 +141,7 @@ def train(config):
         : config["environment"]["sensory_action_x_size"]
     ]
     sensory_action_y_set = list(range(0, observ_y_max, sensory_action_step[1]))[
-        : config["environment"]["sensory_action_x_size"]
+        : config["environment"]["sensory_action_y_size"]
     ]
     sensory_action_set = [
         np.array(a) for a in list(product(sensory_action_x_set, sensory_action_y_set))
