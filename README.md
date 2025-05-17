@@ -29,9 +29,12 @@ In Ram:
 
 
 Size of pong environment:
-- x: 210, y: 160, it seems
+- x: 210, y: 160, it seems (Original game resolution: say, 210×160 (Atari 2600 default))
 
 `make_atari_env` function already preprocess the image to make it grayscale and to crop the images to only have the necessary information to play the game
 
 - Active-gym
   - It seems the pong environment for fovea in active gym (maybe they normalize the colors to 0 to 1), but it says it uses float32 instead of uint8, so the problem is that the buffer get to use a lot of size because they are of 32 bit each and we have buffer size * frame_stack * observation_space * 4bytes. So a buffer_size of 500_000 uses 50GB>But this seems strange eto me did they use 80gb gpus? or is there something wrong here
+
+Extra:
+srun -t 400 -A cs-503 --qos=cs-503 --gres=gpu:1 --mem=32G --pty bash
