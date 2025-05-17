@@ -243,7 +243,7 @@ def train(config, vision_model):
         rb.add(
             pvm_obs,
             real_next_pvm_obs,
-            sensory_actions,
+            motor_actions,
             rewards,
             dones,
             {},
@@ -370,7 +370,6 @@ def train(config, vision_model):
                     eval_env = make_fovea_peripheral_env(
                         config["environment"]["env_id"],
                         config["seed"] + eval_ep,
-                        (sensory_action_step[0], sensory_action_step[1]),
                         frame_stack=config["environment"]["frame_stack"],
                         action_repeat=config["environment"]["action_repeat"],
                         fov_size=(
