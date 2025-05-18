@@ -410,8 +410,8 @@ def train(config, vision_model):
                     while not done:
                         pvm_buffer_eval.append(obs_eval)
                         pvm_obs_eval = pvm_buffer_eval.get_obs(mode="stack_max")
-                        sensory_q_values = sensory_q_network(
-                            resize(torch.from_numpy(pvm_obs_eval))
+                        sensory_q_values = vision_q_network(
+                            resize(torch.from_numpy(pvm_obs_eval)).to(device)
                         )
                         motor_q_values = motor_q_network(
                             resize(torch.from_numpy(pvm_obs_eval)).to(device)
