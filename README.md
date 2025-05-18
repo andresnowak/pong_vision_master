@@ -35,6 +35,7 @@ Size of pong environment:
 
 - Active-gym
   - It seems the pong environment for fovea in active gym (maybe they normalize the colors to 0 to 1), but it says it uses float32 instead of uint8, so the problem is that the buffer get to use a lot of size because they are of 32 bit each and we have buffer size * frame_stack * observation_space * 4bytes. So a buffer_size of 500_000 uses 50GB>But this seems strange eto me did they use 80gb gpus? or is there something wrong here
+  - The **fov loc** expects and has the values in order of y and x not x and y (because an image numpy array is first rows then columns)
 
 Extra:
 srun -t 400 -A cs-503 --qos=cs-503 --gres=gpu:1 --mem=32G --pty bash
