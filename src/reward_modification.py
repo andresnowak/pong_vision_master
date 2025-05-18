@@ -158,8 +158,8 @@ class PongFollowRewardWrapper(gym.Wrapper):
         # reward = self.calculate_foveal_reward_external(fov_loc[0], fov_loc[1], ball_position[0], ball_position[1], self.fov_size[0], self.fov_step_size)
         reward = self.calculate_foveal_reward_external_2(fov_loc[0], fov_loc[1], ball_position[0], ball_position[1], self.fov_size[0],
         )
+        info["foveal_reward"] = float(reward)
 
-        # reward += hit_reward
         return obs, reward, terminated, truncated, info
 
     # For determinstic V4 env
@@ -231,28 +231,46 @@ class PongFollowRewardWrapper(gym.Wrapper):
         ball_x_ram,
         ball_y_ram,
         fovea_size,
-        max_penalty=0.1,
+        max_penalty=0.2,
     ):
         if ball_x_ram is None or ball_y_ram is None:
             return -max_penalty  # fallback default
+        
+        # NOTE: Position of the fovea is top left of the fovea square it seems not its center
+        real_fovea_center_x = fovea_center_x + (fovea_size / 2)
+        real_fovea_center_y = fovea_center_y + (fovea_size / 2)
+        radius = fovea_size / 2
 
         # Rescale RAM coordinates to screen coordinates
         ball_x, ball_y = self.rescale_ball_position(ball_x_ram, ball_y_ram)
 
-        # Euclidean distance
-        dx = fovea_center_x - ball_x
-        dy = fovea_center_y - ball_y
+        # Euclidean distance to center
+        dx = real_fovea_center_x - ball_x
+        dy = real_fovea_center_y - ball_y
 
-        dist = np.sqrt(dx * dx + dy * dy)
+        dist_to_center = np.sqrt(dx**2 + dy**2)
+        dist_to_edge = dist_to_center - radius
+        # print(dist_to_center, dist_to_edge, radius, ball_x, ball_y, real_fovea_center_x, real_fovea_center_y)
 
-        # Define max distance for normalization (e.g., half the diagonal of 84x84 image)
-        max_dist = np.sqrt(84**2 + 84**2) / 2.0  # ~59.4
-        normalized_dist = min(dist / max_dist, 1.0)  # clamp to [0, 1]
+        if dist_to_edge <= 0:
+            # print("yeah")
+            max_reward = 4.0
+            # Normalized distance (0=center, 1=edge)
+            norm_dist = dist_to_center / radius  
+            # Higher reward when closer to center (quadratic decay)
+            # print(max_reward * (1 - norm_dist**2))
+            # return max_reward * (1 - norm_dist**2) 
+            return 10
+        else:
+            # Define max distance for normalization (e.g., half the diagonal of 84x84 image)
+            max_dist = np.sqrt(84**2 + 84**2) / 2 - radius  # ~59.4
+            normalized_dist = min(dist_to_edge / max_dist, 1.0)  # clamp to [0, 1]
 
-        # Reward is less negative the closer the ball is
-        shaped_reward = -max_penalty * (normalized_dist**2)
+            # Reward is less negative the closer the ball is
+            shaped_reward = -max_penalty * (normalized_dist**2)
 
-        return shaped_reward
+            # return shaped_reward
+            return -max_penalty
 
 
     def rescale_ball_position(
