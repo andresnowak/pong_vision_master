@@ -13,6 +13,8 @@ import os, random, re
 from datetime import datetime
 import warnings
 from typing import Dict, Tuple, Union
+import matplotlib.pyplot as plt
+import cv2
 
 import numpy as np
 import torch
@@ -423,3 +425,52 @@ def get_sugarl_reward_scale_atari(game) -> float:
         sugarl_reward_scale = 1/35
     sugarl_reward_scale = sugarl_reward_scale * base_scale
     return sugarl_reward_scale
+
+
+def visualization(env, obs, fovea_loc, fov_size, fig=None, axs=None):
+    frame = obs[-1]  # First channel of the observation
+    full_frame = env.render()
+
+    # Create figure if it doesn't exist
+    if fig is None or axs is None:
+        plt.ion()  # Turn on interactive mode
+        fig, axs = plt.subplots(1, 2, figsize=(8, 4))
+        fig.show()
+
+    # Clear previous content
+    for ax in axs:
+        ax.clear()
+
+    # Scale coordinates from observation space to render space
+    render_h, render_w = full_frame.shape[:2]
+    scale_x = render_w / 84
+    scale_y = render_h / 84
+
+    y, x = fovea_loc
+    x_scaled = int(x * scale_x)
+    y_scaled = int(y * scale_y)
+    w_scaled = int(fov_size * scale_x)
+    h_scaled = int(fov_size * scale_y)
+
+    frame_with_box = full_frame.copy()
+    cv2.rectangle(
+        frame_with_box,
+        (x_scaled, y_scaled),
+        (x_scaled + w_scaled, y_scaled + h_scaled),
+        (255, 0, 0),
+        2,
+    )
+
+    axs[0].imshow(frame_with_box)
+    axs[0].set_title("Full Environment Frame")
+    axs[0].axis("off")
+
+    axs[1].imshow(frame, cmap="gray")
+    axs[1].set_title("Foveated Observation")
+    axs[1].axis("off")
+
+    plt.pause(0.001)  # Reduced pause time for smoother updates
+    fig.canvas.draw()
+    fig.canvas.flush_events()
+
+    return fig, axs  # Return the figure and axes for reuse

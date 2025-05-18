@@ -9,6 +9,7 @@ import cv2
 import time
 from active_gym.atari_env import AtariFixedFovealEnv, AtariEnvArgs
 
+from src.utils import visualization
 from src.config_loader import load_config
 from src.create_env import make_fovea_env
 from src.dqn_sugarl import QNetwork

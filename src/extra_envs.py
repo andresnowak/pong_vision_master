@@ -48,7 +48,7 @@ class CVFidexFovealEnv(FixedFovealEnv):
     
     def detect_ball_position(self, observation):
         # gray = cv2.cvtColor(observation, cv2.COLOR_RGB2GRAY)
-        gray = observation[0]
+        gray = observation[-1]
         gray = np.clip(gray * 255, 0, 255)
         gray = gray.astype(np.uint8)
 
@@ -60,11 +60,12 @@ class CVFidexFovealEnv(FixedFovealEnv):
         candidates = []
         for contour in contours:
             area = cv2.contourArea(contour)
-            if 0.1 < area < 15: # The area of the ball seems to be 3 (but it says w and h are 2 and 4 of the bounding rect, so seems strange to me)
+            if 0.0 <= area < 10: # The area of the ball seems to be 3 (but it says w and h are 2 and 4 of the bounding rect, so seems strange to me)
                 x, y, w, h = cv2.boundingRect(contour)
                 aspect_ratio = w / h if h != 0 else 0
-                if 0.4 < aspect_ratio < 2.5:
-                    candidates.append([x + w // 2, y + h // 2])
+                if 0.2 < aspect_ratio < 2.5:
+                    # candidates.append([x + w // 2, y + h // 2])
+                    candidates.append([y + h // 2, x + w // 2]) # The values are row and column, so we want y and x not x and y
 
         # Return the first candidate found
 

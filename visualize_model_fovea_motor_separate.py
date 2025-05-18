@@ -13,6 +13,7 @@ from src.utils import visualization
 from src.config_loader import load_config
 from src.dqn import QNetwork
 from src.pvm_buffer import PVMBuffer
+from src.extra_envs import CVAtariFixedFovealEnv
 
 NUM_EPISODES = 1
 RENDER_DELAY = 0.05
@@ -31,14 +32,11 @@ print(f"Using device: {device}")
 
 def load_model(model_path: str, env: gym.Env, sensory_action_set):
     motor_model = QNetwork(env).to(device)
-    vision_model = QNetwork(env, sensory_action_set=sensory_action_set).to(device)
     checkpoint = torch.load(model_path, map_location=device)
-    vision_model.load_state_dict(checkpoint["vision_q"])
     motor_model.load_state_dict(checkpoint["motor_q"])
-    vision_model.eval()
     motor_model.eval()
 
-    return motor_model, vision_model
+    return motor_model
 
 
 def watch_agent_play(env, vector_env, model_path: str, config):
@@ -66,7 +64,7 @@ def watch_agent_play(env, vector_env, model_path: str, config):
         np.array(a) for a in list(product(sensory_action_x_set, sensory_action_y_set))
     ]
 
-    motor_model, vision_model = load_model(model_path, vector_env, sensory_action_set)
+    motor_model = load_model(model_path, vector_env, sensory_action_set)
 
     # Fix: Correct buffer shape for vectorized env
     pvm_buffer = PVMBuffer(
@@ -97,16 +95,13 @@ def watch_agent_play(env, vector_env, model_path: str, config):
             # Predict actions
             with torch.no_grad():
                 motor_q = motor_model(input_obs)
-                sensory_q = vision_model(input_obs)
                 motor_action = motor_q.argmax().item()
-                sensory_action_idx = sensory_q.argmax().item()
 
             # Lookup the 2D fovea position
-            fovea_loc = sensory_action_set[sensory_action_idx]
 
             action = {
                 "motor_action": motor_action,
-                "sensory_action": fovea_loc
+                "sensory_action": [54]
             }
     
             obs, reward, done, truncated, info = env.step(action)
@@ -115,7 +110,7 @@ def watch_agent_play(env, vector_env, model_path: str, config):
             frames += 1
 
             # Update visualization
-            fig, axs = visualization(env, obs, fovea_loc, fov_size, fig, axs)
+            fig, axs = visualization(env, obs, info["fov_loc"], fov_size, fig, axs)
 
             time.sleep(RENDER_DELAY)
 
@@ -167,10 +162,10 @@ if __name__ == "__main__":
         mask_out=True,
     )
         
-    env = AtariFixedFovealPeripheralEnv(env_args)
+    env = CVAtariFixedFovealEnv(env_args)
     print(dir(env.ale))
-    env.ale.setMode(1)
-    env.ale.setDifficulty(1)
+    # env.ale.setMode(1)
+    # env.ale.setDifficulty(1)
 
     def reset_with_random_ball(env):
         obs = env.reset()
@@ -190,8 +185,6 @@ if __name__ == "__main__":
 
     vector_env = gym.vector.SyncVectorEnv([lambda: env])
 
-
-    
 
     # Create environment
     watch_agent_play(env, vector_env, args.model, config)
