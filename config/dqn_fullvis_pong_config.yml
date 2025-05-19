@@ -1,0 +1,45 @@
+project: PONG_RL_VL
+exp_name: dqn_fullvis_pong
+seed: 1
+capture_video: false
+
+paths:
+  log_dir: "./logs/dqn_fullvis_pong_yml/"
+  model_save_path: "./models/dqn_pong_yml/dqn_fullvis_pong_best" 
+
+environment:
+  env_id: "pong"
+  env_num: 1
+  frame_stack: 4
+  pvm_stack: 3
+  action_repeat: 4
+  clip_reward: false
+  # There's an assert at some point in active-gym to force fovea_size < obs_size: assert (np.array(self.fov_size) < np.array(self.obs_size)).all()
+  # But fov size doesn't matter if we make peripheral_res = 84 as well
+  fov_size: 83
+  fov_init_loc_x: 0
+  fov_init_loc_y: 0
+  sensory_action_mode: "absolute"
+  sensory_action_space: 1 #10
+  resize_to_full: false
+  # what are the sensory_action for?
+  sensory_action_x_size: 1
+  sensory_action_y_size: 1
+  peripheral_res: 84
+
+algorithm:
+  total_timesteps: 1500
+  learning_rate: 0.0001
+  buffer_size: 100000
+  gamma: 0.99
+  target_network_frequency: 1000
+  batch_size: 32
+  start_e: 1.0
+  end_e: 0.01
+  exploration_fraction: 0.1 # the fraction of `total-timesteps` it takes from start-e to go end-e
+  learning_starts: 80000
+  train_frequency: 4
+
+evaluation:
+  eval_frequency: 500
+  eval_num: 1
