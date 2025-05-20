@@ -15,7 +15,7 @@ from active_gym import (
 
 
 from src.reward_modification import PongRamHitRewardWrapper, PongCVFovealRewardWrapper, PongFollowRewardWrapper
-from src.extra_envs import CVAtariFixedFovealEnv
+from src.extra_envs import CVAtariFixedFovealEnv, CVAtariFixedFovealPeripheralEnv
 
 def make_no_vision_env(env_id: str, n_envs: int, seed: int, n_stack: int = 4):
     # env = make_vec_env(env_id, n_envs=n_envs, seed=seed, wrapper_class=PongRamHitRewardWrapper)
@@ -80,6 +80,16 @@ def make_fovea_cv_env(
     def thunk():
         env_args = AtariEnvArgs(game=env_name, seed=seed, obs_size=(84, 84), **kwargs)
         env = CVAtariFixedFovealEnv(env_args)
+        env.action_space.seed(seed)
+        env.observation_space.seed(seed)
+        return env
+
+    return thunk
+
+def make_fovea_peripheral_cv_env(env_name, seed, **kwargs):
+    def thunk():
+        env_args = AtariEnvArgs(game=env_name, seed=seed, obs_size=(84, 84), **kwargs)
+        env = CVAtariFixedFovealPeripheralEnv(env_args)
         env.action_space.seed(seed)
         env.observation_space.seed(seed)
         return env

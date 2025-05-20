@@ -376,7 +376,7 @@ def train(config):
                             -config["environment"]["sensory_action_space"],
                             config["environment"]["sensory_action_space"],
                         ),
-                        peripheral_res=(config["environment"]["peripheral_res"], config["environment"]["peripheral_res"]),
+                        # peripheral_res=(config["environment"]["peripheral_res"], config["environment"]["peripheral_res"]),
                         resize_to_full=config["environment"]["resize_to_full"],
                         clip_reward=config["environment"]["clip_reward"],
                         mask_out=True,
@@ -491,7 +491,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="config/dqn_fovea_peripheral_pong_motor_separate_config.yml",
+        default="config/dqn_fovea_pong_motor_separate_config.yml",
         help="Path to the configuration YAML file.",
     )
 

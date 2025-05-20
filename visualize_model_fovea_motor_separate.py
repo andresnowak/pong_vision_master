@@ -130,7 +130,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="config/dqn_fovea_peripheral_pong_config.yml",
+        default="config/dqn_fovea_pong_config.yml",
         help="Path to the configuration YAML file.",
     )
 
