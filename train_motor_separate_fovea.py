@@ -105,7 +105,7 @@ def train(config):
             -config["environment"]["sensory_action_space"],
             config["environment"]["sensory_action_space"],
         ),
-        peripheral_res=(config["environment"]["peripheral_res"], config["environment"]["peripheral_res"]),
+        # peripheral_res=(config["environment"]["peripheral_res"], config["environment"]["peripheral_res"]),
         resize_to_full=config["environment"]["resize_to_full"],
         clip_reward=config["environment"]["clip_reward"],
         mask_out=True,
