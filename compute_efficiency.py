@@ -20,9 +20,9 @@ from src.pvm_buffer import PVMBuffer
 
 from torch import nn
 
-N_FRAMES = 200
+N_FRAMES = 500
 
-NUM_EPISODES = 10
+NUM_EPISODES = 1
 RENDER_DELAY = 0.05
 N_STACK = 4
 SEED = 42
