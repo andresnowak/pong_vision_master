@@ -1,11 +1,11 @@
 project: PONG_RL_VL
-exp_name: dqn_fovea_peripheral_motor_separate_pong
+exp_name: dqn_fovea_motor_separate_pong_lca
 seed: 1
 capture_video: false
 
 paths:
-  log_dir: "./logs/dqn_fovea_peripheral_real_peripheral_pong_motor_separate_yml/"
-  model_save_path: "./models/dqn_pong_yml/dqn_fovea_peripheral_real_perihperal_pong_motor_separate_best" 
+  log_dir: "./logs/dqn_fovea_pong_motor_separate_lca_yml/"
+  model_save_path: "./models/dqn_pong_yml/dqn_fovea_pong_motor_separate_lca_best" 
 
 environment:
   env_id: "pong"
@@ -14,7 +14,7 @@ environment:
   pvm_stack: 3
   action_repeat: 4
   clip_reward: false
-  fov_size: 21
+  fov_size: 30
   fov_init_loc_x: 80
   fov_init_loc_y: 105
   sensory_action_mode: "absolute"
@@ -23,7 +23,7 @@ environment:
   # what are the sensory_action for?
   sensory_action_x_size: 4
   sensory_action_y_size: 4
-  peripheral_res: 20
+  # peripheral_res: 20
 
 algorithm:
   total_timesteps: 10000000

@@ -14,7 +14,7 @@ environment:
   pvm_stack: 3
   action_repeat: 4
   clip_reward: false
-  fov_size: 50
+  fov_size: 21
   fov_init_loc_x: 80
   fov_init_loc_y: 105
   sensory_action_mode: "absolute"
@@ -23,7 +23,7 @@ environment:
   # what are the sensory_action for?
   sensory_action_x_size: 4
   sensory_action_y_size: 4
-  peripheral_res: 20
+  peripheral_res: 30
 
 algorithm:
   total_timesteps: 10000000
