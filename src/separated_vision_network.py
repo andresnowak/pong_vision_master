@@ -19,7 +19,32 @@ class SeparatedVisionNetwork(nn.Module):
         # Nombre d'actions possibles
         self.motor_action_dim = motor_action_space.n
         self.sensory_action_dim = len(sensory_action_set)
+
+        # Réseau pour la vision fovéale (haute résolution)
+        self.fovea_network = nn.Sequential(
+            nn.Conv2d(self.fovea_shape[0], 16, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Flatten()
+        )
         
+        # Réseau pour la vision périphérique (basse résolution)
+        self.peripheral_network = nn.Sequential(
+            nn.Conv2d(self.peripheral_shape[0], 8, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Flatten()
+        )
+        
+        # Réseau pour les coordonnées de position
+        self.position_network = nn.Sequential(
+            nn.Linear(self.position_dim, 16),
+            nn.ReLU(),
+            nn.Linear(16, 32),
+            nn.ReLU()
+        )
+        
+        """
         # Réseau pour la vision fovéale (haute résolution)
         self.fovea_network = nn.Sequential(
             nn.Conv2d(self.fovea_shape[0], 32, kernel_size=3, stride=1, padding=1),
@@ -47,6 +72,7 @@ class SeparatedVisionNetwork(nn.Module):
             nn.Linear(32, 32),
             nn.ReLU()
         )
+        """
         
         # Calculer les tailles de sortie des réseaux
         fovea_out_size = self._get_conv_output_size(self.fovea_network, self.fovea_shape)
