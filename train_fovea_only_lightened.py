@@ -35,126 +35,16 @@ import yaml
 from tqdm import tqdm
 import wandb
 
-from src.separated_vision_buffer import SeparatedVisionBuffer
+
+from src.separated_vision_buffer import SeparatedVisionFoveaBuffer
 from src.separated_buffer import StructuredDoubleActionReplayBuffer
-from src.separated_vision_network import SeparatedVisionNetwork
+from src.separated_vision_network import SeparatedVisionFoveaNetwork, SeparatedFoveaSFN
 from src.utils import get_timestr, seed_everything, get_sugarl_reward_scale_atari
 from src.dqn_sugarl import linear_schedule
-from src.create_env import make_fovea_peripheral_env
+from src.create_env import make_fovea_env
 from src.config_loader import load_config
 from src.save_model_helpers import create_run_directory
 
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-
-
-class SeparatedSFN(nn.Module):
-    """
-    State Forecasting Network adapté pour traiter des observations structurées.
-    Ce réseau prédit l'action motrice à partir de l'observation actuelle et future.
-    """
-    def __init__(self, observation_space, motor_action_space):
-        super().__init__()
-        
-        # Récupérer les dimensions des différentes entrées
-        self.fovea_shape = observation_space.spaces["fovea"].shape
-        self.peripheral_shape = observation_space.spaces["peripheral"].shape
-        self.position_dim = observation_space.spaces["position"].shape[0]
-        
-        # Nombre d'actions motrices possibles
-        self.motor_action_dim = motor_action_space.n
-        
-        # Réseau pour la vision fovéale (observation actuelle et future)
-        self.fovea_network = nn.Sequential(
-            nn.Conv2d(self.fovea_shape[0] * 2, 32, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Flatten()
-        )
-        
-        # Réseau pour la vision périphérique (observation actuelle et future)
-        self.peripheral_network = nn.Sequential(
-            nn.Conv2d(self.peripheral_shape[0] * 2, 16, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Flatten()
-        )
-        
-        # Réseau pour les coordonnées de position (actuelle et future)
-        self.position_network = nn.Sequential(
-            nn.Linear(self.position_dim * 2, 32),
-            nn.ReLU()
-        )
-        
-        # Calculer les tailles de sortie des réseaux
-        fovea_out_size = self._get_conv_output_size(self.fovea_network, 
-                                                    (self.fovea_shape[0] * 2, 
-                                                     self.fovea_shape[1], 
-                                                     self.fovea_shape[2]))
-        
-        peripheral_out_size = self._get_conv_output_size(self.peripheral_network, 
-                                                         (self.peripheral_shape[0] * 2, 
-                                                          self.peripheral_shape[1], 
-                                                          self.peripheral_shape[2]))
-        
-        # Couche de fusion
-        fusion_input_size = fovea_out_size + peripheral_out_size + 32  # 32 de position_network
-        self.fusion_layer = nn.Sequential(
-            nn.Linear(fusion_input_size, 256),
-            nn.ReLU()
-        )
-        
-        # Tête de prédiction pour l'action motrice
-        self.motor_head = nn.Linear(256, self.motor_action_dim)
-    
-    def _get_conv_output_size(self, model, input_shape):
-        """Calcule la taille de sortie d'un modèle convolutif"""
-        with torch.no_grad():
-            x = torch.zeros(1, *input_shape)
-            x = model(x)
-            return x.numel()
-    
-    def forward(self, observations_pair):
-        """
-        Traitement des paires d'observations (actuelle et future)
-        
-        Args:
-            observations_pair: dictionnaire contenant 'fovea', 'peripheral' et 'position'
-                               pour les observations actuelles et futures
-        """
-        # Extraire et concaténer les observations actuelles et futures
-        current_fovea = observations_pair["current"]["fovea"]
-        next_fovea = observations_pair["next"]["fovea"]
-        fovea_concat = torch.cat([current_fovea, next_fovea], dim=1)
-        
-        current_peripheral = observations_pair["current"]["peripheral"]
-        next_peripheral = observations_pair["next"]["peripheral"]
-        peripheral_concat = torch.cat([current_peripheral, next_peripheral], dim=1)
-        
-        current_position = observations_pair["current"]["position"]
-        next_position = observations_pair["next"]["position"]
-        position_concat = torch.cat([current_position, next_position], dim=1)
-        
-        # Traiter chaque flux
-        fovea_features = self.fovea_network(fovea_concat)
-        peripheral_features = self.peripheral_network(peripheral_concat)
-        position_features = self.position_network(position_concat)
-        
-        # Fusionner les caractéristiques
-        combined = torch.cat([fovea_features, peripheral_features, position_features], dim=1)
-        features = self.fusion_layer(combined)
-        
-        # Prédire l'action motrice
-        motor_prediction = self.motor_head(features)
-        
-        return motor_prediction
-    
-    def get_loss(self, predicted_actions, true_actions):
-        """Calcule la perte pour l'entraînement du SFN"""
-        return F.cross_entropy(predicted_actions, true_actions)
 
 def train(config):
     wandb.init(
@@ -208,7 +98,7 @@ def train(config):
     #         )
     #     )
     # # envs = gym.vector.AsyncVectorEnv(envs)
-    env_wrapper = make_fovea_peripheral_env(
+    env_wrapper = make_fovea_env(
         config["environment"]["env_id"],
         config["seed"],
         frame_stack=config["environment"]["frame_stack"],
@@ -226,7 +116,6 @@ def train(config):
             -config["environment"]["sensory_action_space"],
             config["environment"]["sensory_action_space"],
         ),
-        peripheral_res=(config["environment"]["peripheral_res"], config["environment"]["peripheral_res"]),
         resize_to_full=config["environment"]["resize_to_full"],
         clip_reward=config["environment"]["clip_reward"],
         mask_out=True,
@@ -245,7 +134,6 @@ def train(config):
         
         # Créer un espace d'observation structuré
         fov_size = config["environment"]["fov_size"]
-        peripheral_res = config["environment"]["peripheral_res"]
         frame_stack = config["environment"]["frame_stack"]
         
         obs_space = Dict({
@@ -253,12 +141,6 @@ def train(config):
                 low=low_val, 
                 high=high_val, 
                 shape=(frame_stack, fov_size, fov_size), 
-                dtype=obs_dtype
-            ),
-            "peripheral": Box(
-                low=low_val, 
-                high=high_val, 
-                shape=(frame_stack, peripheral_res, peripheral_res),
                 dtype=obs_dtype
             ),
             "position": Box(
@@ -295,7 +177,7 @@ def train(config):
     ]
     
     # Créer les réseaux pour l'agent
-    q_network = SeparatedVisionNetwork(
+    q_network = SeparatedVisionFoveaNetwork(
         obs_space, 
         envs.single_action_space["motor_action"], 
         sensory_action_set
@@ -306,14 +188,14 @@ def train(config):
         lr=config["algorithm"]["learning_rate"]
     )
     
-    target_network = SeparatedVisionNetwork(
+    target_network = SeparatedVisionFoveaNetwork(
         obs_space, 
         envs.single_action_space["motor_action"], 
         sensory_action_set
     ).to(device)
     target_network.load_state_dict(q_network.state_dict())
     # Initialiser le SFN pour les observations séparées
-    sfn = SeparatedSFN(obs_space, envs.single_action_space["motor_action"]).to(device)
+    sfn = SeparatedFoveaSFN(obs_space, envs.single_action_space["motor_action"]).to(device)
     sfn_optimizer = optim.Adam(
     sfn.parameters(),
     lr=config["algorithm"]["learning_rate"]
@@ -335,7 +217,7 @@ def train(config):
     # TRY NOT TO MODIFY: start the game
     obs, infos = envs.reset()
     global_transitions = 0
-    pvm_buffer = SeparatedVisionBuffer(
+    pvm_buffer = SeparatedVisionFoveaBuffer(
         config["environment"]["pvm_stack"],
         observation_structure=obs_space,
     )
@@ -606,7 +488,7 @@ def train(config):
                 eval_episodic_returns, eval_episodic_lengths = [], []
             
                 for eval_ep in range(config["evaluation"]["eval_num"]):
-                    eval_env = make_fovea_peripheral_env(
+                    eval_env = make_fovea_env(
                         config["environment"]["env_id"],
                         config["seed"] + eval_ep,
                         frame_stack=config["environment"]["frame_stack"],
@@ -624,7 +506,6 @@ def train(config):
                             -config["environment"]["sensory_action_space"],
                             config["environment"]["sensory_action_space"],
                         ),
-                        peripheral_res=(config["environment"]["peripheral_res"], config["environment"]["peripheral_res"]),
                         resize_to_full=config["environment"]["resize_to_full"],
                         clip_reward=config["environment"]["clip_reward"],
                         mask_out=True,
@@ -638,7 +519,7 @@ def train(config):
                     done = False
                     
                     # Créer un buffer d'observations séparé pour l'évaluation
-                    pvm_buffer_eval = SeparatedVisionBuffer(
+                    pvm_buffer_eval = SeparatedVisionFoveaBuffer(
                         config["environment"]["pvm_stack"],
                         observation_structure=obs_space
                     )
@@ -753,7 +634,6 @@ def convert_to_structured_obs(obs, config):
     
     # Paramètres de configuration
     fov_size = config["environment"]["fov_size"]
-    peripheral_res = config["environment"]["peripheral_res"]
     
     # Afficher des informations sur les valeurs pour déboguer
     #print(f"Plage de valeurs obs: min={obs.min()}, max={obs.max()}, type={obs.dtype}")
@@ -788,13 +668,6 @@ def convert_to_structured_obs(obs, config):
                 fovea_region = np.pad(fovea_region, ((0, y_pad), (0, x_pad)), mode='constant')
             fovea[b, f] = fovea_region
     
-    # Créer la vision périphérique (redimensionner l'image complète à basse résolution)
-    peripheral = np.zeros((batch_size, frames, peripheral_res, peripheral_res), dtype=normalized_obs.dtype)
-    for b in range(batch_size):
-        for f in range(frames):
-            from skimage.transform import resize
-            peripheral[b, f] = resize(normalized_obs[b, f], (peripheral_res, peripheral_res), 
-                                     anti_aliasing=True, preserve_range=True).astype(normalized_obs.dtype)
     
     # Position de la fovéa
     position = np.array([[center_x - fov_size // 2, center_y - fov_size // 2]], dtype=np.float32)
@@ -803,7 +676,6 @@ def convert_to_structured_obs(obs, config):
     
     return {
         "fovea": fovea,  
-        "peripheral": peripheral,
         "position": position
     }
 
@@ -812,7 +684,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="config/dqn_fovea_peripheral_pong_light_config.yml",
+        default="config/dqn_fovea_pong_light_config.yml",
         help="Path to the configuration YAML file.",
     )
 

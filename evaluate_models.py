@@ -253,19 +253,6 @@ def evaluate_agent(env, vector_env, model_path: str, config, model_type: str):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Evaluate DQN model performance")
-    parser.add_argument(
-        "--episodes",
-        type=int,
-        default=30,
-        help="Number of episodes to evaluate (default: 100)",
-    )
-
-    args = parser.parse_args()
-
-    # Update NUM_EPISODES from command line argument
-    NUM_EPISODES = args.episodes
-
     model_list = [
         "models/dqn_pong_yml/dqn_fovea_pong_motor_separate_lca_best/run_20250521_020159/trained_models/pong_seed1_step10000000_model.pt",
         "models/dqn_pong_yml/dqn_fovea_peripheral_pong_motor_separate_best/run_20250518_202609/trained_models/pong_seed1_step10000000_model.pt",
@@ -286,6 +273,40 @@ if __name__ == "__main__":
         "models/dqn_pong_yml/dqn_fovea_peripheral_pong_best/run_20250509_230000/config.yml",
         "models/dqn_pong_yml/dqn_fovea_pong_best/run_20250509_153631/config.yml",
     ]
+
+    parser = argparse.ArgumentParser(description="Evaluate DQN model performance")
+    parser.add_argument(
+        "--episodes",
+        type=int,
+        default=30,
+        help="Number of episodes to evaluate (default: 30)",
+    )
+
+    parser.add_argument(
+        "--model",
+        type=str,  # This is the type of each element in the list
+        nargs="+",  # This means 1 or more values
+        default=model_list,
+        help="model paths",
+    )
+
+    parser.add_argument(
+        "--config",
+        type=str,  # This is the type of each element in the list
+        nargs="+",  # This means 1 or more values
+        default=config_list,
+        help="config paths in same order as model paths",
+    )
+    
+
+    args = parser.parse_args()
+
+    # Update NUM_EPISODES from command line argument
+    NUM_EPISODES = args.episodes
+
+    model_list = args.model
+    config_list = args.config
+    
 
     all_results = {}
     set_global_seed(42)
