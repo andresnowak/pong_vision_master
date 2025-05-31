@@ -235,7 +235,7 @@ def train(config):
             # Si l'environnement ne retourne pas directement des observations séparées,
             # vous devrez les extraire/convertir ici
             # Cette partie dépend beaucoup de comment votre environnement est configuré
-            structured_obs = convert_to_structured_obs(obs, config)
+            structured_obs = convert_to_structured_obs(obs, config, infos["fov_loc"])
         else:
             structured_obs = obs
                 # À ajouter après avoir créé une observation structurée
@@ -317,7 +317,7 @@ def train(config):
         # TRY NOT TO MODIFY: save data to reply buffer; handle `terminal_observation`
         # Convertir next_obs si nécessaire
         if not isinstance(next_obs, dict):
-            structured_next_obs = convert_to_structured_obs(next_obs, config)
+            structured_next_obs = convert_to_structured_obs(next_obs, config, infos["fov_loc"])
         else:
             structured_next_obs = next_obs
         
@@ -527,7 +527,7 @@ def train(config):
                     while not done:
                         # Convertir les observations si nécessaire
                         if not isinstance(obs_eval, dict):
-                            structured_obs_eval = convert_to_structured_obs(obs_eval, config)
+                            structured_obs_eval = convert_to_structured_obs(obs_eval, config, infos["fov_loc"])
                         else:
                             structured_obs_eval = obs_eval
                         
@@ -625,58 +625,53 @@ def train(config):
     writer.close()
     progress_bar.close()
 
-def convert_to_structured_obs(obs, config):
+def convert_to_structured_obs(obs, config, fov_loc):
     """
-    Convertit une observation brute en observations structurées avec fovéa et périphérie.
+    Convert raw observation into structured observations with fovea and periphery.
+    fov_loc: (y, x) coordinates representing the top-left position of the fovea (row, column order)
     """
-    # Vérifier la forme de l'observation
+    # Check observation shape
     batch_size, frames, height, width = obs.shape
-    
-    # Paramètres de configuration
+
+    # Configuration parameters
     fov_size = config["environment"]["fov_size"]
-    
-    # Afficher des informations sur les valeurs pour déboguer
-    #print(f"Plage de valeurs obs: min={obs.min()}, max={obs.max()}, type={obs.dtype}")
-    
-    
-    # Normaliser les données si nécessaire
-    # Si les valeurs sont entre -1 et 1, les ramener entre 0 et 1 pour l'affichage
+
+    # Normalize data if needed
+    # If values are between -1 and 1, scale them to 0-1 for display
     if obs.min() < 0:
         normalized_obs = (obs + 1) / 2
     else:
         normalized_obs = obs.copy()
-    
-    # Calculer les coordonnées du centre de l'image
-    center_x, center_y = width // 2, height // 2
-    
-    # Calculer les coordonnées de la fovéa
-    fov_x1 = max(0, center_x - fov_size // 2)
-    fov_y1 = max(0, center_y - fov_size // 2)
+
+    # Get fovea coordinates from fov_loc (y, x) row-column order
+    fov_location = fov_loc[0]
+    fov_y1, fov_x1 = fov_location[0], fov_location[1]
     fov_x2 = min(width, fov_x1 + fov_size)
     fov_y2 = min(height, fov_y1 + fov_size)
-    
-    # Initialiser les structures pour les observations séparées
-    fovea = np.zeros((batch_size, frames, fov_size, fov_size), dtype=normalized_obs.dtype)
-    
-    # Extraire la région fovéale (vision haute résolution)
+
+    # Initialize structures for separated observations
+    fovea = np.zeros(
+        (batch_size, frames, fov_size, fov_size), dtype=normalized_obs.dtype
+    )
+
+    # Extract foveal region (high-resolution vision)
     for b in range(batch_size):
         for f in range(frames):
             fovea_region = normalized_obs[b, f, fov_y1:fov_y2, fov_x1:fov_x2]
             if fovea_region.shape[0] < fov_size or fovea_region.shape[1] < fov_size:
                 y_pad = max(0, fov_size - fovea_region.shape[0])
                 x_pad = max(0, fov_size - fovea_region.shape[1])
-                fovea_region = np.pad(fovea_region, ((0, y_pad), (0, x_pad)), mode='constant')
+                fovea_region = np.pad(
+                    fovea_region, ((0, y_pad), (0, x_pad)), mode="constant"
+                )
             fovea[b, f] = fovea_region
-    
-    
-    # Position de la fovéa
-    position = np.array([[center_x - fov_size // 2, center_y - fov_size // 2]], dtype=np.float32)
-    
-    # Validation supplémentaire pour l'affichage
-    
+
+    # Fovea position (y, x) coordinates
+    position = np.array([fov_location], dtype=np.float32)
+
     return {
-        "fovea": fovea,  
-        "position": position
+        "fovea": fovea,
+        "position": position,  # Returns (y, x) coordinates
     }
 
 if __name__ == "__main__":

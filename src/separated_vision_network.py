@@ -143,230 +143,141 @@ class SeparatedVisionNetwork(nn.Module):
         
         return motor_q_values, sensory_q_values
     
+    
 
 class SeparatedVisionFoveaNetwork(nn.Module):
-    """
-    Réseau neuronal qui traite séparément les entrées fovéales, périphériques et les coordonnées.
-    """
-
     def __init__(self, observation_space, motor_action_space, sensory_action_set):
         super().__init__()
 
-        # Récupérer les dimensions des différentes entrées
+        # Taille originale de la fovéa (C, H, W)
         self.fovea_shape = observation_space.spaces["fovea"].shape
-        self.position_dim = observation_space.spaces["position"].shape[
-            0
-        ]  # Généralement 2 (x, y)
 
-        # Nombre d'actions possibles
-        self.motor_action_dim = motor_action_space.n
-        self.sensory_action_dim = len(sensory_action_set)
+        # Après padding, H+1, W+1
+        in_channels = self.fovea_shape[0]
 
-        # Réseau pour la vision fovéale (haute résolution)
+        # Réseau convolutif unique pour l'image fovéale étendue
         self.fovea_network = nn.Sequential(
-            nn.Conv2d(self.fovea_shape[0], 16, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_channels, 16, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
             nn.Flatten(),
         )
 
-        # Réseau pour la vision périphérique (basse résolution)
+        # Calcul de la taille de sortie de la couche conv
+        padded_shape = (in_channels, self.fovea_shape[1] + 1, self.fovea_shape[2] + 1)
+        fovea_out_size = self._get_conv_output_size(self.fovea_network, padded_shape)
 
-        # Réseau pour les coordonnées de position
-        self.position_network = nn.Sequential(
-            nn.Linear(self.position_dim, 16), nn.ReLU(), nn.Linear(16, 32), nn.ReLU()
-        )
+        # Réseau de fusion directe de la carte de caractéristiques
+        self.fusion_layer = nn.Sequential(nn.Linear(fovea_out_size, 256), nn.ReLU())
 
-        """
-        # Réseau pour la vision fovéale (haute résolution)
-        self.fovea_network = nn.Sequential(
-            nn.Conv2d(self.fovea_shape[0], 32, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Flatten()
-        )
-        
-        # Réseau pour la vision périphérique (basse résolution)
-        self.peripheral_network = nn.Sequential(
-            nn.Conv2d(self.peripheral_shape[0], 16, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Flatten()
-        )
-        
-        # Réseau pour les coordonnées de position
-        self.position_network = nn.Sequential(
-            nn.Linear(self.position_dim, 32),
-            nn.ReLU(),
-            nn.Linear(32, 32),
-            nn.ReLU()
-        )
-        """
-
-        # Calculer les tailles de sortie des réseaux
-        fovea_out_size = self._get_conv_output_size(
-            self.fovea_network, self.fovea_shape
-        )
-
-        # Couche de fusion
-        fusion_input_size = (
-            fovea_out_size + 32
-        )  # 32 de position_network
-        self.fusion_layer = nn.Sequential(nn.Linear(fusion_input_size, 256), nn.ReLU())
-
-        # Têtes de décision pour les actions motrices et sensorielles
-        self.motor_head = nn.Linear(256, self.motor_action_dim)
-        self.sensory_head = nn.Linear(256, self.sensory_action_dim)
+        # Têtes pour actions motrices et sensorielles
+        self.motor_head = nn.Linear(256, motor_action_space.n)
+        self.sensory_head = nn.Linear(256, len(sensory_action_set))
 
     def _get_conv_output_size(self, model, input_shape):
-        """Calcule la taille de sortie d'un modèle convolutif"""
         with torch.no_grad():
-            # Créer un tenseur d'entrée de la bonne taille
             x = torch.zeros(1, *input_shape)
-            # Passer à travers le modèle
-            x = model(x)
-            # Retourner la taille aplatie
-            return x.numel()
+            return model(x).numel()
 
     def forward(self, observations):
-        """
-        Traitement séparé des différentes entrées puis fusion
+        fovea = observations["fovea"]  # (B, C, H, W)
+        position = observations[
+            "position"
+        ]  # (B, 2) avec (x, y) entiers [0..W-1], [0..H-1]
 
-        Args:
-            observations: dictionnaire contenant 'fovea', 'peripheral' et 'position'
-        """
-        # Extraire les différentes composantes
-        fovea = observations["fovea"]
-        position = observations["position"]
+        B, C, H, W = fovea.shape
+        # Créer la fovéa étendue de taille (H+1, W+1)
+        padded = fovea.new_zeros(B, C, H + 1, W + 1)
+        padded[:, :, :H, :W] = fovea
 
-        # Traiter chaque composante séparément
-        fovea_features = self.fovea_network(fovea)
+        # Normalisation des coordonnées entre -1 et 1
+        pos_x = (position[:, 0].float() / (W - 1)) * 2 - 1  # (B,)
+        pos_y = (position[:, 1].float() / (H - 1)) * 2 - 1  # (B,)
 
+        # Remplir la dernière ligne (h == H) avec pos_x
+        padded[:, :, H, :W] = pos_x.view(B, 1, 1).expand(B, C, W)
+        # Remplir la dernière colonne (w == W) avec pos_y
+        padded[:, :, :H, W] = pos_y.view(B, 1, 1).expand(B, C, H)
 
-        # S'assurer que position a la bonne forme [batch_size, position_dim]
-        # Si position est [position_dim], ajouter une dimension de batch
-        if position.dim() == 1:
-            position = position.unsqueeze(0)  # Ajouter une dimension de batch
+        # Passer la fovéa étendue dans le réseau conv
+        fovea_features = self.fovea_network(padded)
 
-        position_features = self.position_network(position)
+        # Fusion et têtes d'action
+        features = self.fusion_layer(fovea_features)
+        motor_q = self.motor_head(features)
+        sensory_q = self.sensory_head(features)
 
-        # Vérifier que tous les tenseurs ont le même nombre de dimensions
-        if fovea_features.dim() != position_features.dim():
-            if fovea_features.dim() > position_features.dim():
-                # Adapter position_features à la dimension de fovea_features
-                position_features = position_features.unsqueeze(
-                    0
-                )  # Ajouter une dimension de batch
-            else:
-                # Cas rare, mais par précaution
-                position_features = position_features.squeeze(
-                    0
-                )  # Enlever la dimension de batch
-
-        # Concaténer les caractéristiques
-        combined = torch.cat(
-            [fovea_features, position_features], dim=1
-        )
-
-        # Fusionner les caractéristiques
-        features = self.fusion_layer(combined)
-
-        # Calculer les valeurs Q pour les actions motrices et sensorielles
-        motor_q_values = self.motor_head(features)
-        sensory_q_values = self.sensory_head(features)
-
-        return motor_q_values, sensory_q_values
+        return motor_q, sensory_q
     
 
 class SeparatedFoveaSFN(nn.Module):
     """
-    State Forecasting Network adapté pour traiter des observations structurées.
-    Ce réseau prédit l'action motrice à partir de l'observation actuelle et future.
+    State Forecasting Network adapté pour traiter paires de fovéa + coordonnées spatiales.
+    Prédit l'action motrice à partir des fovéas actuelle et future,
+    en incorporant la position directement dans l'espace image.
     """
 
     def __init__(self, observation_space, motor_action_space):
         super().__init__()
-
-        # Récupérer les dimensions des différentes entrées
-        self.fovea_shape = observation_space.spaces["fovea"].shape
-        self.position_dim = observation_space.spaces["position"].shape[0]
-
-        # Nombre d'actions motrices possibles
-        self.motor_action_dim = motor_action_space.n
-
-        # Réseau pour la vision fovéale (observation actuelle et future)
+        # Dimensions Fovea (C, H, W)
+        C, H, W = observation_space.spaces["fovea"].shape
+        # On double les canaux pour current + next
+        in_channels = C * 2
+        # Convolution unique après padding spatial
         self.fovea_network = nn.Sequential(
-            nn.Conv2d(self.fovea_shape[0] * 2, 32, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_channels, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
             nn.Flatten(),
         )
-
-        # Réseau pour les coordonnées de position (actuelle et future)
-        self.position_network = nn.Sequential(
-            nn.Linear(self.position_dim * 2, 32), nn.ReLU()
+        # Calcul taille de sortie conv pour entrée (in_channels, H+1, W+1)
+        conv_output_size = self._get_conv_output_size(
+            self.fovea_network, (in_channels, H + 1, W + 1)
         )
-
-        # Calculer les tailles de sortie des réseaux
-        fovea_out_size = self._get_conv_output_size(
-            self.fovea_network,
-            (self.fovea_shape[0] * 2, self.fovea_shape[1], self.fovea_shape[2]),
-        )
-
-        # Couche de fusion
-        fusion_input_size = (
-            fovea_out_size + 32
-        )  # 32 de position_network
-        self.fusion_layer = nn.Sequential(nn.Linear(fusion_input_size, 256), nn.ReLU())
-
-        # Tête de prédiction pour l'action motrice
-        self.motor_head = nn.Linear(256, self.motor_action_dim)
+        # Fusion et tête motrice
+        self.fusion = nn.Sequential(nn.Linear(conv_output_size, 256), nn.ReLU())
+        self.motor_head = nn.Linear(256, motor_action_space.n)
 
     def _get_conv_output_size(self, model, input_shape):
-        """Calcule la taille de sortie d'un modèle convolutif"""
         with torch.no_grad():
             x = torch.zeros(1, *input_shape)
-            x = model(x)
-            return x.numel()
+            return model(x).numel()
 
     def forward(self, observations_pair):
-        """
-        Traitement des paires d'observations (actuelle et future)
+        # Récupérer fovéas et positions
+        curr_f = observations_pair["current"]["fovea"]  # (B, C, H, W)
+        next_f = observations_pair["next"]["fovea"]  # (B, C, H, W)
+        curr_p = observations_pair["current"]["position"]  # (B, 2)
+        next_p = observations_pair["next"]["position"]  # (B, 2)
 
-        Args:
-            observations_pair: dictionnaire contenant 'fovea', 'peripheral' et 'position'
-                               pour les observations actuelles et futures
-        """
-        # Extraire et concaténer les observations actuelles et futures
-        current_fovea = observations_pair["current"]["fovea"]
-        next_fovea = observations_pair["next"]["fovea"]
-        fovea_concat = torch.cat([current_fovea, next_fovea], dim=1)
+        B, C, H, W = curr_f.shape
+        # Concatener le canal fovéa
+        fovea_cat = torch.cat([curr_f, next_f], dim=1)  # (B, 2C, H, W)
+        # Créer tensor padding (H+1, W+1)
+        padded = fovea_cat.new_zeros(B, 2 * C, H + 1, W + 1)
+        padded[:, :, :H, :W] = fovea_cat
 
-        current_position = observations_pair["current"]["position"]
-        next_position = observations_pair["next"]["position"]
-        position_concat = torch.cat([current_position, next_position], dim=1)
+        # Normaliser coords en [-1,1]
+        cx = (curr_p[:, 0].float() / (W - 1)) * 2 - 1
+        cy = (curr_p[:, 1].float() / (H - 1)) * 2 - 1
+        nx = (next_p[:, 0].float() / (W - 1)) * 2 - 1
+        ny = (next_p[:, 1].float() / (H - 1)) * 2 - 1
 
-        # Traiter chaque flux
-        fovea_features = self.fovea_network(fovea_concat)
-        position_features = self.position_network(position_concat)
+        # Remplir dernière ligne et colonne pour chaque moitié de canaux
+        # canaux [0:C) = current, [C:2C) = next
+        # ligne H
+        padded[:, :C, H, :W] = cx.view(B, 1, 1).expand(B, C, W)
+        padded[:, C:, H, :W] = nx.view(B, 1, 1).expand(B, C, W)
+        # colonne W
+        padded[:, :C, :H, W] = cy.view(B, 1, 1).expand(B, C, H)
+        padded[:, C:, :H, W] = ny.view(B, 1, 1).expand(B, C, H)
 
-        # Fusionner les caractéristiques
-        combined = torch.cat(
-            [fovea_features, position_features], dim=1
-        )
-        features = self.fusion_layer(combined)
+        # Passer au conv
+        features = self.fovea_network(padded)
+        features = self.fusion(features)
+        return self.motor_head(features)
 
-        # Prédire l'action motrice
-        motor_prediction = self.motor_head(features)
-
-        return motor_prediction
-
-    def get_loss(self, predicted_actions, true_actions):
-        """Calcule la perte pour l'entraînement du SFN"""
-        return F.cross_entropy(predicted_actions, true_actions)
+    def get_loss(self, predicted, target):
+        return F.cross_entropy(predicted, target)
