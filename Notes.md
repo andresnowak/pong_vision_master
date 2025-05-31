@@ -39,3 +39,5 @@ Size of pong environment:
 
 Extra:
 srun -t 400 -A cs-503 --qos=cs-503 --gres=gpu:1 --mem=32G --pty bash
+
+zip -r pong_vision_master.zip pong_vision_master -x "pong_vision_master/best_models/*" "pong_vision_master/models/*" "pong_vision_master/runs/*" "pong_vision_master/wandb/*" "pong_vision_master/trained_models/*"

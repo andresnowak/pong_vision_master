@@ -12,6 +12,8 @@ This project explores different reinforcement learning approaches to play the Po
 
 ## File Structure
 
+trained_models folder is not here as this is not possible to upload with the zip to moodel, but when training a model a training_models folder will be created with the respective folder for the model type
+
 ```
 pong_vision_master/
 ├── compute_efficiency.py              # Calculates model efficiency metrics
@@ -27,16 +29,12 @@ pong_vision_master/
 ├── evaluate_model_no_vision.py        # Evaluation for RAM-based models
 ├── evaluate_models.py                 # Combined evaluation script
 ├── example_active_gym.py              # Example usage of active-gym framework
-├── experiments/                       # Output directory for experiment results
+├── trained_models/                       # Output directory for experiment results and checkpoints
 │   ├── full_vision/                   # Results from full vision experiments
 │   ├── foveal_vision/                 # Results from foveal vision experiments
 │   └── no_vision/                     # Results from RAM-based experiments
 ├── fovea_visualization.gif            # Visual example of foveal mechanism
 ├── logs/                              # Training and evaluation logs
-├── models/                            # Saved trained models
-│   ├── full_vision/                   # Full vision model checkpoints
-│   ├── foveal/                        # Foveal vision model checkpoints
-│   └── no_vision/                     # RAM-based model checkpoints
 ├── pong_with_vision/                  # Analysis notebooks for vision-based agents
 │   ├── analysis.ipynb                 # Analysis of vision-based learning
 │   └── visualizations.ipynb           # Visualizations of agent behavior
@@ -46,7 +44,6 @@ pong_vision_master/
 ├── README.md                          # This documentation file
 ├── requirements.txt                   # Python package dependencies
 ├── run.sh                             # SLURM job submission script
-├── run50.sh                           # Alternative SLURM script (50 iterations)
 ├── split_vision_env.py                # Custom environment for split vision experiments
 ├── src/                               # Source code directory
 │   ├── buffer.py                      # Experience replay buffer implementations
